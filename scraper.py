@@ -170,20 +170,10 @@ def extract_data_from_html(
                 if element.get_text(strip=True)
             ]
         # If no data was found, assign a default empty string
-        extracted_data[field] = values if values else [""]
         
-        elif field in regex_patterns:
-            matched_data = re.findall(regex_patterns[field], soup.get_text())
-            for data_item in matched_data:
-                # Attempt to parse JSON-like strings if applicable
-                if isinstance(data_item, str):
-                    try:
-                        parsed = json.loads(data_item)
-                        extracted_values.append(parsed)
-                    except json.JSONDecodeError:
-                        extracted_values.append(data_item)
-                else:
-                    extracted_values.append(data_item)
+        
+        
+        extracted_data[field] = values if values else [""]
 
         # Only add the field if we found at least one value.
         # if extracted_values:
