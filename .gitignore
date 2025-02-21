@@ -1,6 +1,5 @@
 venv/
 ./venv
-./.env
-.env
+
 test.js
 legacy.js
