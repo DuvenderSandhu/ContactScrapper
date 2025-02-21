@@ -1,8 +1,7 @@
 # from crontab import CronTab
 from api_management import get_supabase_client
 from markdown import fetch_and_store_markdowns
-
-
+from scraper import scrape_urls_manually,scrape_urls
 supabase = get_supabase_client()
 
 # cron = CronTab(user=True)
@@ -48,7 +47,7 @@ def run_task(command,cron):
         in_tokens_s, out_tokens_s, cost_s, parsed_data = scrape_urls(unique_names,cron['fields'],cron['selection_type'])
         print(parsed_data)
         data= {
-            data:parsed_data
+            "data":parsed_data
         }
         supabase.table("cron").update(data).eq("id",cron['id']).execute()
         print("Saved",unique_name)
@@ -58,7 +57,7 @@ def run_task(command,cron):
         print("all Data",all_data)
 
         data= {
-            data:all_data
+            "data":all_data
         }
         supabase.table("cron").update(data).eq("id",cron['id']).execute()
         print("Updated ")
@@ -104,7 +103,7 @@ def run_crons():
     fetch_and_schedule_crons(scheduler)
 
     # Schedule the fetch_and_schedule_crons function to run every hour
-    scheduler.add_job(fetch_and_schedule_crons, CronTrigger.from_crontab('*/2 * * * *'), args=[scheduler])
+    scheduler.add_job(fetch_and_schedule_crons, CronTrigger.from_crontab('* * * * *'), args=[scheduler])
 
     # Start the scheduler
     scheduler.start()
@@ -117,6 +116,16 @@ def run_crons():
         scheduler.shutdown()  # Clean up and shut down the scheduler when done
 
 
+def get_cron_data():
+    supabase = get_supabase_client()
+    # Fetch all active cron jobs from the database
+    response = supabase.table("cron").select("id", "cronCommand","depth_value","urls","fields","css_selector","selection_type","selection_type","next_button_selector","max_url","data").execute()
+    print("Response",response)
+    cron_jobs = response.data
+    if(len(cron_jobs)!=0):
+        return cron_jobs
+    else:
+        return []
 # Start the cron jobs by calling the function
 
 # Start the cron jobs by calling the function

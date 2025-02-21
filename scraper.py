@@ -118,36 +118,60 @@ def extract_data_from_html(
     css_selectors: Optional[Dict[str, str]] = None
 ) -> List[Dict[str, object]]:
     """
-    This function extracts data from HTML content using either CSS selectors or regular expressions.
-    It groups multiple matches under a "listings" key.
+    Extracts data from HTML content using CSS selectors and returns a combined data structure.
     
-    :param html_content: The HTML content to extract data from.
-    :param fields: A list of fields to extract (either predefined or custom fields).
-    :param css_selectors: A dictionary where keys are field names and values are CSS selectors.
-    :return: A list of dictionaries containing extracted data for each field.
+    The output is a list containing one dictionary with a "unique_name" and a "parsed_data"
+    key. "parsed_data" contains "listings", which is a list of dictionaries where each dictionary
+    represents a row with all fields (even if some fields have empty data).
+    
+    Example output:
+    [
+        {
+            "unique_name": "combined_data",
+            "parsed_data": {
+                "listings": [
+                    {
+                        "email": "Kimberly Nebesnyk",
+                        "mobile number": "(352) 303-4493",
+                        "dob": "",
+                        "name": "John Doe"
+                    },
+                    {
+                        "email": "Amanda Greene",
+                        "mobile number": "(941) 929-9090",
+                        "dob": "",
+                        "name": "Jane Doe"
+                    }
+                ]
+            }
+        }
+    ]
+    
+    :param html_content: The HTML content to parse.
+    :param fields: A list of field names to extract.
+    :param css_selectors: A dictionary mapping field names to their respective CSS selectors.
+    :return: A structured list of extracted data.
     """
-    # Allow a single field as a string
     if isinstance(fields, str):
         fields = [fields]
 
-    # This dictionary will group results by field name.
-    grouped_data: Dict[str, List[object]] = {}
     soup = BeautifulSoup(html_content, 'html.parser')
 
+    # Extract data for each field
+    extracted_data: Dict[str, List[str]] = {}
     for field in fields:
-        extracted_values = []  # Temporarily store all matches for this field
-
-        # Case 1: Use CSS selector if provided for this field
+        values = []
         if css_selectors and field in css_selectors:
-            css_selector = css_selectors.get(field)
+            css_selector = css_selectors[field]
             elements = soup.select(css_selector)
-            for element in elements:
-                if element:
-                    # Extract text content
-                    data_item = element.get_text(strip=True)
-                    extracted_values.append(data_item)
-
-        # Case 2: Use regex pattern if defined for the field
+            values = [
+                element.get_text(strip=True)
+                for element in elements
+                if element.get_text(strip=True)
+            ]
+        # If no data was found, assign a default empty string
+        extracted_data[field] = values if values else [""]
+        
         elif field in regex_patterns:
             matched_data = re.findall(regex_patterns[field], soup.get_text())
             for data_item in matched_data:
@@ -162,37 +186,52 @@ def extract_data_from_html(
                     extracted_values.append(data_item)
 
         # Only add the field if we found at least one value.
-        if extracted_values:
-            grouped_data[field] = extracted_values
+        # if extracted_values:
+        #     grouped_data[field] = extracted_values
 
-    # Now, convert the grouped data into the desired list of dictionaries.
-    all_data = []
-    for field, values in grouped_data.items():
-        if len(values) > 1:
-            data_entry = {
-                "unique_name": field,
-                "parsed_data": {
-                    "listings": [{field: value} for value in values]  # Fixing the structure
-                }
-            }
-        else:
-            data_entry = {"unique_name": field, "parsed_data": {field: values[0]}}  # Ensuring consistency for single items
+    # Determine the maximum number of rows across all fields
+    max_rows = max(len(v) for v in extracted_data.values())
 
-    all_data.append(data_entry)
+    # Combine the extracted data row-wise into a list of dictionaries
+    combined_rows = []
+    for i in range(max_rows):
+        row = {}
+        for field in fields:
+            row[field] = extracted_data[field][i] if i < len(extracted_data[field]) else ""
+        combined_rows.append(row)
 
+    # Build the final structure preserving the initial style
+    final_data = [{
+        "unique_name": "combined_data",
+        "parsed_data": {
+            "listings": combined_rows
+        }
+    }]
 
-    return all_data
+    return final_data
+def scrape_urls_manually(
+    unique_names: List[str], 
+    fields: List[str], 
+    css_selectors: Optional[Dict[str, str]] = None
+) -> List[Dict[str, object]]:
+    """
+    Scrapes and extracts data manually from stored HTML content.
 
-
-def scrape_urls_manually(unique_names: List[str], field: List[str], css_selectors: Optional[Dict[str, str]] = None) -> List[Dict[str, object]]:
-    completeData = []
+    :param unique_names: List of unique identifiers for stored HTML.
+    :param fields: List of fields to extract.
+    :param css_selectors: Dictionary mapping fields to CSS selectors.
+    :return: A combined list of extracted data.
+    """
+    complete_data = []
+    
     for uniq in unique_names:
         raw_data = read_raw_data(uniq)  # Function to read raw HTML data
         if not raw_data:
             print(f"Skipping {uniq}, no raw data found.")
             continue
 
-        # Extract data using the extract_data_from_html function
-        data = extract_data_from_html(raw_data, field, css_selectors)
-        completeData.extend(data)  # Use extend to add each dict to the list
-    return completeData
+        # Extract data
+        data = extract_data_from_html(raw_data, fields, css_selectors)
+        complete_data.extend(data)  
+
+    return complete_data  # Fixed return statement

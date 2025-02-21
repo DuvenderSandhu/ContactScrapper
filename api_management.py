@@ -25,3 +25,5 @@ def get_supabase_client():
         return None
 
     return create_client(supabase_url, supabase_key)
+
+

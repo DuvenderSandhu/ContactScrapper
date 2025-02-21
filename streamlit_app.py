@@ -6,6 +6,7 @@ import pandas as pd
 import json
 import re
 import time
+import json
 import sys
 import asyncio
 from crontab import CronTab
@@ -16,7 +17,9 @@ from markdown import fetch_and_store_markdowns
 from assets import MODELS_USED
 from cron import createCron,run_crons
 from api_management import get_supabase_client
+from cron import get_cron_data
 cron = CronTab(user=True)
+
 cron_syntax= ""
 # Only use WindowsProactorEventLoopPolicy on Windows
 if sys.platform.startswith("win"):
@@ -431,8 +434,40 @@ if scheduling:
 #         st.session_state['scraping_state'] = 'scraping'
 
 
+def showCronData(data):
+    #sameple Data (all_data[0].get('data'))
+    st.session_state['scraping_state'] = 'completed' 
+    # print("final",all_data[0].get('data'))
+    st.session_state['results'] ={
+        'data': json.loads(data),
+        'input_tokens':0,
+        'output_tokens':0,
+        'total_cost': 0,
+        'pagination_info': False
+    }
+# st.table(all_data)
+def show_cron_data():
+    # Get all the cron data
+    all_data = get_cron_data()
+    
+    # Prepare a list of cron commands for the table
+    new_data = list(map(lambda x: x.get('cronCommand'), all_data))
+    
+    # Place the table inside the sidebar container
+    with st.sidebar:
+        for index, cron_command in enumerate(new_data):
+            # Create two columns in the sidebar: one for the cron command, one for the button
+            cols = st.sidebar.columns([3, 1])
+            
+            # Display the cron command in the first column
+            cols[0].write(cron_command)
+            
+            # Display a "Show Data" button in the second column
+            if cols[1].button(f"Show Data {index}", key=f"button_{index}"):
+                # When clicked, show the associated data in the sidebar
+                showCronData(all_data[index]['data'])
 
-
+show_cron_data()
 if st.session_state['scraping_state'] == 'scraping':
     try:
         with st.spinner("Processing..."):
@@ -507,7 +542,7 @@ if st.session_state['scraping_state'] == 'completed' and st.session_state['resul
     # Display scraping details
     # Debugging snippet inside your "Scraping Results" section
 
-    if show_tags:
+    if show_tags or all_data:
         st.subheader("Scraping Results")
 
         # We'll accumulate all rows in this list
@@ -518,12 +553,15 @@ if st.session_state['scraping_state'] == 'completed' and st.session_state['resul
 
             # Usually data_item is something like:
             # {"unique_name": "...", "parsed_data": DynamicListingsContainer(...) or dict or str}
-
+            print("Data_item",data_item)
             # 1) Ensure data_item is a dict
             if not isinstance(data_item, dict):
                 st.error(f"data_item is not a dict, skipping. Type: {type(data_item)}")
                 continue
-
+            print("Data Item ",data_item)
+            if(not data_item.get("parsed_data")):
+                 st.warning("No data rows to display.")
+                 break
             # 2) If "parsed_data" is present and might be a Pydantic model or something
             if "parsed_data" in data_item:
                 parsed_obj = data_item["parsed_data"]
@@ -545,7 +583,10 @@ if st.session_state['scraping_state'] == 'completed' and st.session_state['resul
             # 3) If the "parsed_data" has a 'listings' key that is a list of items,
             #    we might want to treat them as multiple rows. 
             #    Otherwise, we treat the entire data_item as a single row.
-
+            # print(data_item)
+            if(not data_item["parsed_data"]):
+                 st.warning("No data rows to display.")
+                 break
             pd_obj = data_item["parsed_data"]
         
             # If it has 'listings' in parsed_data
