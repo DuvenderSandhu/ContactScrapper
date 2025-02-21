@@ -112,93 +112,74 @@ regex_patterns = {
     'password': r'(?i)(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+])[A-Za-z\d!@#$%^&*()_+]{8,}',
 }
 
+from typing import List, Dict, Optional
+from bs4 import BeautifulSoup
+import re
+
 def extract_data_from_html(
     html_content: str,
     fields: List[str],
     css_selectors: Optional[Dict[str, str]] = None
 ) -> List[Dict[str, object]]:
     """
-    Extracts data from HTML content using CSS selectors and returns a combined data structure.
-    
-    The output is a list containing one dictionary with a "unique_name" and a "parsed_data"
-    key. "parsed_data" contains "listings", which is a list of dictionaries where each dictionary
-    represents a row with all fields (even if some fields have empty data).
-    
-    Example output:
-    [
-        {
-            "unique_name": "combined_data",
-            "parsed_data": {
-                "listings": [
-                    {
-                        "email": "Kimberly Nebesnyk",
-                        "mobile number": "(352) 303-4493",
-                        "dob": "",
-                        "name": "John Doe"
-                    },
-                    {
-                        "email": "Amanda Greene",
-                        "mobile number": "(941) 929-9090",
-                        "dob": "",
-                        "name": "Jane Doe"
-                    }
-                ]
-            }
-        }
-    ]
-    
-    :param html_content: The HTML content to parse.
-    :param fields: A list of field names to extract.
-    :param css_selectors: A dictionary mapping field names to their respective CSS selectors.
-    :return: A structured list of extracted data.
+    Extracts data from HTML content using CSS selectors and regex fallbacks, returning a structured list of data.
     """
-    if isinstance(fields, str):
-        fields = [fields]
-
     soup = BeautifulSoup(html_content, 'html.parser')
-
-    # Extract data for each field
     extracted_data: Dict[str, List[str]] = {}
+    
+    # Predefined regex patterns for common fields
+    default_regex = {
+        'email': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+        'mobile number': r'(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}',
+        'phone': r'(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}',
+        'dob': r'\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b',
+        'date of birth': r'\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b',
+        'name': r'(?i)\b[A-Z][a-z]+(?: [A-Z][a-z]+)+\b'  # Basic name pattern
+    }
+    
     for field in fields:
         values = []
         if css_selectors and field in css_selectors:
-            css_selector = css_selectors[field]
-            elements = soup.select(css_selector)
+            # Extract using CSS selector
+            elements = soup.select(css_selectors[field])
             values = [
                 element.get_text(strip=True)
                 for element in elements
                 if element.get_text(strip=True)
             ]
-        # If no data was found, assign a default empty string
+        else:
+            # Attempt regex extraction based on field name
+            regex_key = next(
+                (key for key in default_regex.keys() if key.lower() == field.lower()),
+                None
+            )
+            if regex_key:
+                text = soup.get_text()
+                matches = re.findall(default_regex[regex_key], text, flags=re.IGNORECASE)
+                values = [match.strip() for match in matches if match.strip()]
         
-        
-        
+        # Ensure at least one entry (empty string if no data)
         extracted_data[field] = values if values else [""]
-
-        # Only add the field if we found at least one value.
-        # if extracted_values:
-        #     grouped_data[field] = extracted_values
-
-    # Determine the maximum number of rows across all fields
-    max_rows = max(len(v) for v in extracted_data.values())
-
-    # Combine the extracted data row-wise into a list of dictionaries
+    
+    # Determine max number of rows
+    max_rows = max(len(v) for v in extracted_data.values()) if extracted_data else 0
+    
+    # Combine into rows
     combined_rows = []
     for i in range(max_rows):
-        row = {}
-        for field in fields:
-            row[field] = extracted_data[field][i] if i < len(extracted_data[field]) else ""
+        row = {field: extracted_data[field][i] if i < len(extracted_data[field]) else "" for field in fields}
         combined_rows.append(row)
-
-    # Build the final structure preserving the initial style
+    
+    # Build final structure
     final_data = [{
         "unique_name": "combined_data",
         "parsed_data": {
             "listings": combined_rows
         }
     }]
-
+    
     return final_data
+
 def scrape_urls_manually(
     unique_names: List[str], 
     fields: List[str], 
