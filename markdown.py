@@ -12,11 +12,14 @@ from crawl4ai.async_configs import BrowserConfig
 supabase = get_supabase_client()
 
 
-async def get_fit_markdown_async(url: str, depth, max_url, nextButton) -> str:
+async def get_fit_markdown_async(url: str, depth, max_url, nextButton, visited_urls=None) -> str:
     """
     Async function using crawl4ai's AsyncWebCrawler to produce the regular raw markdown.
-    (Reverting from the 'fit' approach back to normal.)
+    Handles depth limit, max pages limit, and avoids infinite scraping.
     """
+    if visited_urls is None:
+        visited_urls = set()  # To track visited URLs and prevent infinite recursion
+
     site_config = {
         "max_depth": 5,
         "include_external": True,
@@ -25,40 +28,6 @@ async def get_fit_markdown_async(url: str, depth, max_url, nextButton) -> str:
         "handle_lazy_load": True,
     }
 
-    # config = CrawlerRunConfig(
-    #     # Force the crawler to wait until images are fully loaded
-    #     wait_for_images=True,
-    #     scan_full_page=True,  # Tells the crawler to try scrolling the entire page   # Delay (seconds) between scroll steps
-    #     cache_mode=CacheMode.BYPASS,
-    #     js_code="""
-    #         let interval;
-    #         async function clickShowMore() {
-    #             while (true) {
-    #                 const showMoreButton = document.querySelector('#show-more-agents');
-    #                 if (showMoreButton) {
-    #                     console.log("Clicking 'Show More'");
-    #                     showMoreButton.click();
-
-    #                     // Wait for new content to load
-    #                     await new Promise(resolve => setTimeout(resolve, 500)); // Adjust the time if needed
-
-    #                     // Optionally, break the loop after a certain condition
-    #                     if (!document.querySelector('#show-more-agents')) {
-    #                         console.log("No more 'Show More' button found. Stopping.");
-    #                         break;
-    #                     }
-    #                 } else {
-    #                     console.log("No more 'Show More' button found. Stopping.");
-    #                     break;
-    #                 }
-    #             }
-    #         }
-
-    #         // Start the function
-    #         clickShowMore();
-    #     """
-
-    # )
     def getProxy():
         proxies = [{"server": "http://115.241.225.42:80"}]
         return random.choice(proxies)
@@ -73,97 +42,136 @@ async def get_fit_markdown_async(url: str, depth, max_url, nextButton) -> str:
             "Mozilla/5.0 (Linux; Android 10; Pixel 3 XL) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36",
             "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/93.0",
         ]
-
-        # Select a random user-agent
         return random.choice(user_agents)
-
-    proxy = {
-        "http": "http://brd-customer-hl_4553195c-zone-freemium:nh3maedoeehc@brd.superproxy.io:33335",
-        "https": "http://brd-customer-hl_4553195c-zone-freemium:nh3maedoeehc@brd.superproxy.io:33335",
-    }
 
     browser_config = BrowserConfig()
     async with AsyncWebCrawler(config=browser_config) as crawler:
         wholeData = ""
+        
+        # Prevent infinite scraping by limiting depth and max pages
+        if depth < 0 or len(visited_urls) >= max_url:
+            print(f"Stopping scraping as depth is {depth} and max pages limit {max_url} reached.")
+            return wholeData
+
         if nextButton:
             config = CrawlerRunConfig(
-                # Force the crawler to wait until images are fully loaded
                 wait_for_images=True,
-                scan_full_page=True,  # Tells the crawler to try scrolling the entire page   # Delay (seconds) between scroll steps
+                scan_full_page=True,
                 cache_mode=CacheMode.BYPASS,
-                user_agent=get_random_user_agent(),  # Limit requests to 30 per minute                 # Enable automatic proxy rotation (ensure your proxies are set up)
+                user_agent=get_random_user_agent(),
                 js_code=f"""
-            let interval;
-            async function clickShowMore() {{
-                while (true) {{
-                    const showMoreButton = document.querySelector('{nextButton}');
-                    if (showMoreButton) {{
-                        console.log("Clicking 'Show More'");
-                        showMoreButton.click();
-                        
-                        // Wait for new content to load
-                        await new Promise(resolve => setTimeout(resolve, 3000)); // Adjust the time if needed
-                        
-                        // Optionally, break the loop after a certain condition
-                        if (!document.querySelector('{nextButton}')) {{
-                            console.log("No more 'Show More' button found. Stopping.");
-                            break;
+                    let interval;
+                    async function clickShowMore() {{
+                        while (true) {{
+                            const showMoreButton = document.querySelector('{nextButton}');
+                            if (showMoreButton) {{
+                                console.log("Clicking 'Show More'");  // JS logging
+                                showMoreButton.click();
+                                await new Promise(resolve => setTimeout(resolve, 3000)); // Adjust the time if needed
+                                if (!document.querySelector('{nextButton}')) {{
+                                    console.log("No more 'Show More' button found. Stopping.");  // JS logging
+                                    break;
+                                }}
+                            }} else {{
+                                console.log("No more 'Show More' button found. Stopping.");  // JS logging
+                                break;
+                            }}
                         }}
-                    }} else {{
-                        console.log("No more 'Show More' button found. Stopping.");
-                        break;
                     }}
-                }}
-            }}
-
-// Start the function
-clickShowMore();
-""",
+                    clickShowMore();
+                """,
                 wait_for="js:() => document.readyState === 'complete'",
-                verbose=True# proxy_config={"server":getProxy()['server']}
+                verbose=True
             )
         else:
             config = CrawlerRunConfig(
-                user_agent=get_random_user_agent(),  # Random delay between 2 to 5 seconds
+                user_agent=get_random_user_agent(),
                 wait_for_images=True,
-                scan_full_page=True,  # Tells the crawler to try scrolling the entire page   # Delay (seconds) between scroll steps
+                scan_full_page=True,
                 cache_mode=CacheMode.BYPASS,
-                verbose=True#  proxy_config={"server":getProxy()['server']}
+                verbose=True
             )
         crawler = URLCrawler(site_config)
+
+        # Log the depth value at the start (Python log)
+        print(f"Starting crawl with depth: {depth}")
+
         if depth == 0:
+            print("Fetching data for the root URL")
             result = await crawler.fetch_data(url, config=config)
             try:
                 if result.success:
                     wholeData += result.html
-                    return wholeData
+                    visited_urls.add(url)  # Mark the root URL as visited
+                    print("Root URL data fetched successfully")
                 else:
+                    print("Failed to fetch data from the root URL")
                     wholeData += ""
                     return wholeData
 
-                urls = await crawler.get_urls(
-                    url, depth, max_url
-                )  # second Argument Depth
-                print("Discovered URLs:")
+                urls = await crawler.get_urls(url, depth, max_url)
+                print(f"Discovered URLs: {urls}")
+
                 for url in sorted(urls):
-                    print(f"- {url}")
+                    if url in visited_urls:  # Skip if the URL has already been visited
+                        continue
+                    print(f"Processing discovered URL: {url}")
                     try:
-                        config = CrawlerRunConfig(
-                            # Force the crawler to wait until images are fully loaded
-                            wait_for_images=True,
-                            scan_full_page=True,  # Tells the crawler to try scrolling the entire page   # Delay (seconds) between scroll steps
-                            cache_mode=CacheMode.BYPASS,
-                            verbose=True #wproxy_config={"server":getProxy()['server']}
-                        )
                         result = await crawler.fetch_data(url, config)
                         if result.success:
                             wholeData += result.cleaned_html
+                            visited_urls.add(url)  # Mark this URL as visited
+                            print(f"Successfully fetched data for: {url}")
                         else:
+                            print(f"Failed to fetch data for: {url}")
                             wholeData += ""
-                    except:
+                    except Exception as e:
+                        print(f"Error fetching URL {url}: {e}")
                         continue
                 return wholeData
-            except:
+            except Exception as e:
+                print(f"Error at depth 0: {e}")
+                return ""
+
+        else:
+            print(f"Fetching data for URL at depth {depth}")
+            result = await crawler.fetch_data(url, config=config)
+            try:
+                if result.success:
+                    wholeData += result.html
+                    visited_urls.add(url)  # Mark the URL as visited
+                    print(f"Data fetched successfully for URL at depth {depth}")
+                else:
+                    print("Failed to fetch data from URL at this depth")
+                    wholeData += ""
+                    return wholeData
+
+                urls = await crawler.get_urls(url, depth, max_url)
+                print(f"Discovered URLs at depth {depth}: {urls}")
+
+                for url in sorted(urls):
+                    if url in visited_urls:  # Skip if the URL has already been visited
+                        continue
+                    print(f"Processing discovered URL at depth {depth}: {url}")
+                    try:
+                        result = await crawler.fetch_data(url, config)
+                        if result.success:
+                            wholeData += result.cleaned_html
+                            visited_urls.add(url)  # Mark this URL as visited
+                            print(f"Successfully fetched data for: {url}")
+                        else:
+                            print(f"Failed to fetch data for: {url}")
+                            wholeData += ""
+                    except Exception as e:
+                        print(f"Error fetching URL {url}: {e}")
+                        continue
+
+                # Decrease depth and recurse
+                print(f"Decreasing depth from {depth} to {depth - 1}")
+                return await get_fit_markdown_async(url, depth - 1, max_url, nextButton, visited_urls)
+
+            except Exception as e:
+                print(f"Error at depth {depth}: {e}")
                 return ""
 
 

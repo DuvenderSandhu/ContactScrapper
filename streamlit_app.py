@@ -493,8 +493,9 @@ if st.session_state['scraping_state'] == 'scraping':
                 st.session_state['cost_s'] = cost_s
             # 2) Pagination logic
             else:
+                print("Unique Names",unique_names)
                 all_data= scrape_urls_manually(unique_names,st.session_state['fields'],st.session_state['css-selectors'])
-                # print(all_data)
+                print(all_data)
                 st.session_state['in_tokens_s'] = 0
                 st.session_state['out_tokens_s'] = 0
                 st.session_state['cost_s'] = 0

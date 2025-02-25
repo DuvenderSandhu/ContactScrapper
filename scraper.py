@@ -4,11 +4,12 @@ import json
 from typing import List
 from pydantic import BaseModel, create_model
 from assets import (OPENAI_MODEL_FULLNAME,GEMINI_MODEL_FULLNAME,SYSTEM_MESSAGE)
-from llm_calls import (call_llm_model)
+from llm_calls import (call_llm_model,clean_html_from_string)
 from markdown import read_raw_data
 from api_management import get_supabase_client
 from utils import  generate_unique_name
 import re
+
 from bs4 import BeautifulSoup
 supabase = get_supabase_client()
 
@@ -84,7 +85,7 @@ def scrape_urls(unique_names: List[str], fields: List[str], selected_model: str)
             RESET = "\033[0m"
             print(f"{BLUE}No raw_data found for {uniq}, skipping.{RESET}")
             continue
-
+        print("Selected Model",selected_model,"System Message is ",SYSTEM_MESSAGE)
         parsed, token_counts, cost = call_llm_model(raw_data, DynamicListingsContainer, selected_model, SYSTEM_MESSAGE)
 
         # store
@@ -202,6 +203,7 @@ def scrape_urls_manually(
             continue
 
         # Extract data
+        # raw_data= clean_html_from_string(raw_data)
         data = extract_data_from_html(raw_data, fields, css_selectors)
         complete_data.extend(data)  
 

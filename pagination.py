@@ -76,6 +76,8 @@ def paginate_urls(unique_names: List[str], selected_model: str, indication: str,
         if not raw_data:
             print(f"No raw_data found for {uniq}, skipping pagination.")
             continue
+
+        print("model",selected_model)
         response_schema=get_pagination_response_format()
         full_indication=build_pagination_prompt(indication,current_url)
         pag_data, token_counts, cost = call_llm_model(raw_data, response_schema,selected_model, full_indication)

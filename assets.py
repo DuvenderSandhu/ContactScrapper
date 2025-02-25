@@ -7,9 +7,12 @@ that are used across different parts of the application.
 GEMINI_MODEL_FULLNAME="gemini/gemini-1.5-flash"
 OPENAI_MODEL_FULLNAME="gpt-4o-mini"
 DEEPSEEK_MODEL_FULLNAME ="groq/deepseek-r1-distill-llama-70b"
+# MODELS_USED = {
+#     OPENAI_MODEL_FULLNAME: {"OPENAI_API_KEY"},
+#     GEMINI_MODEL_FULLNAME: {"GEMINI_API_KEY"},
+#     DEEPSEEK_MODEL_FULLNAME : {"GROQ_API_KEY"},
+# }
 MODELS_USED = {
-    OPENAI_MODEL_FULLNAME: {"OPENAI_API_KEY"},
-    GEMINI_MODEL_FULLNAME: {"GEMINI_API_KEY"},
     DEEPSEEK_MODEL_FULLNAME : {"GROQ_API_KEY"},
 }
 # Timeout settings for web scraping
