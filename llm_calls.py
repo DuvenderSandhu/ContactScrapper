@@ -12,12 +12,11 @@ def clean_html_from_string(html_content):
 
     # Parse the HTML content with BeautifulSoup
     soup = BeautifulSoup(html_content, 'lxml')
-    print("HTML parsed with BeautifulSoup.")
 
-    # Step 1: Remove unnecessary elements like scripts, navigation, footer, ads, etc.
-    print("Removing unnecessary elements...")
+
+
     for tag in soup(['script', 'style', 'footer', 'header', 'nav', 'aside', 'advertisement', 'ads']):
-        print(f"Removing tag: {tag.name}")
+    
         tag.decompose()  # This removes the tag and its content
 
     # Step 2: Extract specific content (e.g., the main article or product info)
@@ -25,15 +24,15 @@ def clean_html_from_string(html_content):
     main_content = soup.find('div', class_='main-content')  # Adjust the class as per your needs
 
     if main_content:
-        print("Main content found!")
+       
         # Extract only the text or specific elements you're interested in (e.g., text content)
         text_content = main_content.get_text(separator=' ', strip=True)
-        print(f"Extracted text: {text_content[:100]}...")  # Print the first 100 characters of the extracted text for preview
+        # Print the first 100 characters of the extracted text for preview
     else:
-        print("Main content not found, extracting from body...")
+        
         # If the main content isn't found, fallback to the entire body
         text_content = soup.body.get_text(separator=' ', strip=True)
-        print(f"Extracted text from body: {text_content[:100]}...")  # Preview the first 100 characters
+       
 
     return text_content
 
@@ -63,66 +62,63 @@ def call_llm_model(data,response_format,model,system_message,extra_user_instruct
             - token_counts: A dict with "input_tokens" and "output_tokens".
             - cost: The overall cost (in USD) for the API call.
     """
-    try:
-        data= clean_html_from_string(data)
-        print("Datehere ",data)
-        # 1) Retrieve the single API key name for this model from MODELS_USED
-        env_var_name = list(MODELS_USED[model])[0]  # e.g., "GEMINI_API_KEY"
-        # 2) Retrieve the actual key from session or OS
-        env_value = get_api_key(model)
-        print("env variable is:" + env_value)
-        # 3) Set it in os.environ so that litellm / underlying client sees it
-        if env_value:
-            os.environ[env_var_name] = env_value
+    data= clean_html_from_string(data)
+    # 1) Retrieve the single API key name for this model from MODELS_USED
+    env_var_name = list(MODELS_USED[model])[0]  # e.g., "GEMINI_API_KEY"
+    # 2) Retrieve the actual key from session or OS
+    env_value = get_api_key(model)
+    print("env variable is:" + env_value)
+    # 3) Set it in os.environ so that litellm / underlying client sees it
+    if env_value:
+        os.environ[env_var_name] = env_value
 
-        model_max_tokens = get_max_tokens(model)
-        if max_tokens is not None:
-            max_tokens = min(max_tokens, model_max_tokens)-100 
-        elif use_model_max_tokens_if_none:
-            max_tokens = model_max_tokens -100
+    model_max_tokens = get_max_tokens(model)
+    if max_tokens is not None:
+        max_tokens = min(max_tokens, model_max_tokens)-100 
+    elif use_model_max_tokens_if_none:
+        max_tokens = model_max_tokens -100
 
-        # Build the conversation messages
-        messages = [
-            {"role": "system", "content": system_message},
-            {"role": "user","content": f"{USER_MESSAGE} {extra_user_instruction} {data}"}
-        ]
+    # Build the conversation messages
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user","content": f"{USER_MESSAGE} {extra_user_instruction} {data}"}
+    ]
 
-        # Prepare parameters for the LiteLLM completion call
-        params = {
-            "model": model,
-            "messages": messages,
-            "response_format": response_format,
-        }
-        if max_tokens is not None:
-            params["max_tokens"] = max_tokens
+    # Prepare parameters for the LiteLLM completion call
+    params = {
+        "model": model,
+        "messages": messages,
+        "response_format": response_format,
+    }
+    if max_tokens is not None:
+        params["max_tokens"] = max_tokens
 
-        # Call the LLM using LiteLLM
-        response = completion(**params)
+    # Call the LLM using LiteLLM
+    response = completion(**params)
+    
+    # Extract the parsed response
+    parsed_response = response.choices[0].message.content
 
-        # Extract the parsed response
-        parsed_response = response.choices[0].message.content
+    # Calculate token counts:
+    #   - input_tokens: from the user/system prompt
+    #   - output_tokens: from the returned content
+    input_tokens = token_counter(model=model, messages=messages)
 
-        # Calculate token counts:
-        #   - input_tokens: from the user/system prompt
-        #   - output_tokens: from the returned content
-        input_tokens = token_counter(model=model, messages=messages)
+    # Make sure we convert the parsed response to a string for counting
+    output_text = (
+        parsed_response if isinstance(parsed_response, str)
+        else json.dumps(parsed_response)
+    )
+    output_tokens = token_counter(model=model, text=output_text)
 
-        # Make sure we convert the parsed response to a string for counting
-        output_text = (
-            parsed_response if isinstance(parsed_response, str)
-            else json.dumps(parsed_response)
-        )
-        output_tokens = token_counter(model=model, text=output_text)
+    token_counts = {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+    }
 
-        token_counts = {
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-        }
+    # Calculate the total cost for the request
+    cost = completion_cost(completion_response=response)
 
-        # Calculate the total cost for the request
-        cost = completion_cost(completion_response=response)
+    return parsed_response, token_counts, cost
 
-        return parsed_response, token_counts, cost
-    except:
-        return {"parsedValue":"data"},0,0
 

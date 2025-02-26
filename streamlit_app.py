@@ -28,7 +28,7 @@ if sys.platform.startswith("win"):
 
 
 # Initialize Streamlit app
-st.set_page_config(page_title="Universal Web Scraper", page_icon="🦑",layout="wide")
+st.set_page_config(page_title="ContactScrapper Web Scraper", page_icon="https://botdigit.com/favicon/favicon.svg",layout="wide")
 hide_streamlit_style = """
     <style>
     .st-emotion-cache-1wbqy5l {visibility: hidden;}
@@ -526,7 +526,7 @@ if st.session_state['scraping_state'] == 'scraping':
             st.session_state['scraping_state'] = 'completed'
     except Exception as e:
         # Display the error message.
-        st.error(f"An error occurred during scraping: {e}")
+        st.error(f"An error occurred during scraping Kindly Check your API or Limit Exceeded: {e}")
 
         # Reset the scraping state to 'idle' so that the app stays in an idle state.
         st.session_state['scraping_state'] = 'idle'
